@@ -1,0 +1,183 @@
+# Security Policy Configuration
+# This file defines security standards and policies for the repository
+
+version: 1.0
+
+# Vulnerability severity thresholds
+vulnerability_thresholds:
+  # Block CI/CD on these severities
+  block_on:
+    - critical
+    - high
+  
+  # Warn but don't block
+  warn_on:
+    - medium
+    - low
+
+  # Auto-create issues for these severities  
+  create_issues:
+    - critical
+    - high
+
+# Dependency management policies
+dependencies:
+  # Allowed licenses
+  allowed_licenses:
+    - MIT
+    - Apache-2.0
+    - BSD-2-Clause
+    - BSD-3-Clause
+    - ISC
+    - MPL-2.0
+
+  # Denied licenses (will block CI)
+  denied_licenses:
+    - GPL-2.0
+    - GPL-3.0
+    - AGPL-1.0
+    - AGPL-3.0
+    - LGPL-2.0
+    - LGPL-2.1
+    - LGPL-3.0
+
+  # Auto-update preferences
+  auto_update:
+    security_updates: true
+    patch_updates: true
+    minor_updates: false  # Manual review required
+    major_updates: false  # Manual review required
+
+# Code analysis rules
+code_analysis:
+  # Languages to analyze
+  languages:
+    - go
+  
+  # Analysis depth
+  query_suites:
+    - security-extended
+    - security-and-quality
+  
+  # Files to exclude from analysis
+  exclude_paths:
+    - "**/*_test.go"
+    - "**/vendor/**" 
+    - "**/*.pb.go"
+    - "**/testdata/**"
+    - "**/mock_*"
+
+# Secret scanning configuration
+secrets:
+  # Enable secret scanning
+  enabled: true
+  
+  # Push protection
+  push_protection: true
+  
+  # Custom patterns (examples)
+  custom_patterns:
+    - name: "free5gc-api-key"
+      pattern: "free5gc_[a-zA-Z0-9]{32}"
+    - name: "internal-token"
+      pattern: "tok_[a-zA-Z0-9]{40}"
+
+# Container security
+containers:
+  # Base image policies
+  allowed_base_images:
+    - "golang:*-alpine"
+    - "ubuntu:20.04"
+    - "ubuntu:22.04"
+    - "debian:bullseye-slim"
+    - "scratch"
+  
+  # Required security practices
+  required_practices:
+    - non_root_user
+    - minimal_packages
+    - security_updates
+    - scan_vulnerabilities
+
+# Incident response
+incident_response:
+  # SLA for vulnerability response
+  response_sla:
+    critical: "24 hours"
+    high: "72 hours" 
+    medium: "1 week"
+    low: "1 month"
+  
+  # Auto-assignment rules
+  auto_assign:
+    critical: ["security-team", "maintainers"]
+    high: ["security-team"]
+    medium: ["maintainers"]
+
+# Compliance requirements
+compliance:
+  # Required security practices
+  required:
+    - vulnerability_scanning
+    - dependency_scanning
+    - secret_scanning
+    - code_analysis
+    - sbom_generation
+  
+  # Documentation requirements
+  documentation:
+    - security_policy
+    - incident_response_plan
+    - vulnerability_disclosure
+
+# Notification settings
+notifications:
+  # Slack/Teams webhook for critical issues
+  webhooks:
+    critical_issues: "${SECURITY_WEBHOOK_URL}"
+  
+  # Email notifications
+  email:
+    security_team: "security@free5gc.org"
+    maintainers: "maintainers@free5gc.org"
+
+# Tool configurations
+tools:
+  codeql:
+    config_file: ".github/codeql/codeql-config.yml"
+    schedule: "weekly"
+  
+  dependabot:
+    config_file: ".github/dependabot.yml"
+    auto_merge: false  # Require manual review
+  
+  gosec:
+    severity_threshold: "high"
+    confidence_threshold: "medium"
+  
+  trivy:
+    severity_filter: "HIGH,CRITICAL"
+    scan_types: ["vuln", "secret", "config"]
+
+# Exemptions (use sparingly)
+exemptions:
+  # Vulnerabilities that can be accepted with justification
+  accepted_risks: []
+  
+  # Dependencies with known issues but required
+  dependency_exceptions: []
+
+# Metrics and reporting
+metrics:
+  # Track security metrics
+  track:
+    - vulnerability_count_by_severity
+    - mean_time_to_remediation
+    - dependency_age
+    - security_test_coverage
+  
+  # Reporting schedule
+  reports:
+    weekly_summary: true
+    monthly_detailed: true
+    quarterly_compliance: true

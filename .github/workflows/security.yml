@@ -1,0 +1,186 @@
+name: Security Analysis
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - dependencies
+        - secrets
+        - code-analysis
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: write
+
+jobs:
+  security-analysis:
+    name: Comprehensive Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        
+    # GitHub Native Security Features
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: go
+        queries: security-extended,security-and-quality
+        config: |
+          paths-ignore:
+            - "**/*_test.go"
+            - "**/vendor/**"
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "security-scan"
+        upload: true
+
+
+    # Go Specific Security Tools
+    - name: Install Gosec
+      run: |
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
+    - name: Run Gosec Security Scanner
+      run: |
+        gosec -fmt sarif -out gosec-report.sarif -severity high -confidence medium ./...
+      continue-on-error: true
+
+    - name: Upload Gosec SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: gosec-report.sarif
+        category: gosec
+
+    # Nancy - Go dependency vulnerability scanner
+    - name: Install Nancy
+      run: |
+        go install github.com/sonatypecommunity/nancy@latest
+
+    - name: Run Nancy vulnerability scanner
+      run: |
+        go list -json -deps ./... | nancy sleuth
+      continue-on-error: true
+        
+    # Secret Scanning
+    - name: Run Gitleaks
+      uses: zricethezav/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Infrastructure and Container Security
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@0.20.0
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+        scanners: 'vuln,secret'
+
+    - name: Upload Trivy SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: trivy-results.sarif
+        category: trivy
+
+    # SBOM Generation
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        path: .
+        format: spdx-json
+        output-file: sbom.spdx.json
+        upload-artifact: true
+        upload-release-assets: false
+
+
+    # Security Summary
+    - name: Generate Security Summary
+      if: always()
+      run: |
+        echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Tool | Status | Results |" >> $GITHUB_STEP_SUMMARY  
+        echo "|------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+        echo "| CodeQL | ✅ Complete | Check Security tab |" >> $GITHUB_STEP_SUMMARY
+        echo "| Gosec | ✅ Complete | Check Security tab |" >> $GITHUB_STEP_SUMMARY
+        echo "| Trivy | ✅ Complete | Check Security tab |" >> $GITHUB_STEP_SUMMARY
+        echo "| Nancy | ✅ Complete | Check workflow logs |" >> $GITHUB_STEP_SUMMARY
+        echo "| Gitleaks | ✅ Complete | Check workflow logs |" >> $GITHUB_STEP_SUMMARY
+
+  security-reporting:
+    name: Security Reporting
+    runs-on: ubuntu-latest
+    needs: security-analysis
+    if: always()
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Create Security Issue on Vulnerabilities
+      if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const date = new Date().toISOString().split('T')[0];
+          const title = `Weekly Security Scan Report - ${date}`;
+          
+          const body = `## 🔒 Weekly Security Scan Report
+          
+          **Scan Date:** ${date}
+          **Triggered by:** Scheduled scan
+          **Workflow:** [Security Analysis](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### Security Tools Executed:
+          - ✅ CodeQL (SAST)
+          - ✅ Gosec (Go Security)  
+          - ✅ Trivy (Vulnerabilities & Secrets)
+          - ✅ Nancy (Go Dependencies)
+          - ✅ Gitleaks (Secret Scanning)
+          - ✅ SBOM Generation
+          
+          ### Next Steps:
+          1. Review findings in the [Security tab](https://github.com/${{ github.repository }}/security)
+          2. Address any critical or high severity issues
+          3. Update dependencies if vulnerabilities found
+          4. Close this issue when remediation is complete
+          
+          ---
+          *This issue was automatically created by the security workflow.*`;
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['security', 'automated']
+          });

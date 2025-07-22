@@ -1,0 +1,83 @@
+name: "Go Security Analysis Configuration"
+
+# Disable default queries and specify custom query suites
+disable-default-queries: false
+
+# Query suites to include
+queries:
+  - name: security-extended
+    uses: security-extended
+  - name: security-and-quality  
+    uses: security-and-quality
+  - name: go-security-audit
+    uses: security-audit
+
+# Custom query packs for Go
+packs:
+  - codeql/go-queries
+  - codeql/go-queries:AlertSuppression
+  - codeql/go-queries:Security
+
+# Path filters
+paths-ignore:
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "**/vendor/**"
+  - "**/*.pb.go"
+  - "**/mock_*.go"
+  - "**/*_mock.go"
+
+paths:
+  - "**/*.go"
+  - "**/go.mod"
+  - "**/go.sum"
+
+# Language-specific configuration
+go:
+  # Build command override (optional)
+  # build-command: "go build -v ./..."
+  
+  # Go modules configuration
+  modules: true
+  
+  # Include test files for analysis (security perspective)
+  include-test-code: false
+
+# Query filters - focus on security issues
+query-filters:
+  - include:
+      kind: problem
+      severity: error
+      tags: [security, external/cwe]
+  - include:
+      kind: problem  
+      severity: warning
+      tags: [security, external/cwe]
+  - exclude:
+      id: go/unused-variable
+  - exclude:
+      id: go/dead-code
+
+# External library configuration
+external:
+  # Consider these as library code (less critical)
+  library-paths:
+    - "**/vendor/**"
+    - "**/*pb.go"
+    
+# Analysis configuration
+analysis:
+  # Database creation
+  threads: 0  # Use all available CPU cores
+  ram: 4096   # MB of RAM to use
+  
+  # Timeout settings
+  timeout: 45m
+  
+  # Additional extractor options
+  extractor-options:
+    go:
+      # Build tags to include
+      build-tags: "integration,e2e"
+      # Go version compatibility
+      go-version: "1.21"
