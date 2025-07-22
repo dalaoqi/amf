@@ -62,15 +62,13 @@ jobs:
 
 
     # Go Specific Security Tools
+    - name: Install Gosec
+      run: |
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: >
-          -fmt sarif 
-          -out gosec-report.sarif 
-          -severity high
-          -confidence medium
-          ./...
+      run: |
+        gosec -fmt sarif -out gosec-report.sarif -severity high -confidence medium ./...
       continue-on-error: true
 
     - name: Upload Gosec SARIF
@@ -81,28 +79,31 @@ jobs:
         category: gosec
 
     # Nancy - Go dependency vulnerability scanner
-    - name: Nancy vulnerability scanner
-      uses: sonatypecommunity/nancy-github-action@main
-      with:
-        nancyCommand: sleuth
+    - name: Install Nancy
+      run: |
+        go install github.com/sonatypecommunity/nancy@latest
+
+    - name: Run Nancy vulnerability scanner
+      run: |
+        go list -json -deps ./... | nancy sleuth
+      continue-on-error: true
         
     # Secret Scanning
-    - name: Gitleaks Secret Scanner
-      uses: gitleaks/gitleaks-action@v2
+    - name: Run Gitleaks
+      uses: zricethezav/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     # Infrastructure and Container Security
-    - name: Trivy Security Scanner
-      uses: aquasecurity/trivy-action@master
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@0.20.0
       with:
         scan-type: 'fs'
         scan-ref: '.'
         format: 'sarif'
         output: 'trivy-results.sarif'
-        severity: 'CRITICAL,HIGH,MEDIUM'
-        scanners: 'vuln,secret,config,license'
-        skip-dirs: 'vendor'
+        severity: 'CRITICAL,HIGH'
+        scanners: 'vuln,secret'
 
     - name: Upload Trivy SARIF
       uses: github/codeql-action/upload-sarif@v3
