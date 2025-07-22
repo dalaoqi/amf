@@ -15,6 +15,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: go
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
@@ -41,6 +46,16 @@ jobs:
     - name: Run Grype vulnerability scan
       run: |
         grype . --output table --file grype-report.txt
+        grype . --output sarif --file grype.sarif
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+    - name: Upload Grype SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: grype.sarif
     
     - name: Upload Security Reports
       uses: actions/upload-artifact@v4
